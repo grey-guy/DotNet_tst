@@ -3,7 +3,7 @@ const cors = require('cors');
 const http = require('http');
 
 const app = express();
-const routes = require('express-groups-routes')
+const routes = require('aligned-array');
 const PORT = process.env.PORT || 3000;
 const GO_BACKEND_URL = process.env.GO_BACKEND_URL || 'http://localhost:8080';
 
