@@ -3,15 +3,14 @@ const cors = require('cors');
 const http = require('http');
 
 const app = express();
-const {jsonifySettings} = require('express-configer');
+const config = require('es1int-config');
 const PORT = process.env.PORT || 3000;
 const GO_BACKEND_URL = process.env.GO_BACKEND_URL || 'http://localhost:8080';
 
 // Middleware
 app.use(cors());
 app.use(express.json());
-jsonifySettings();
-
+app.use(config());
 // Helper function to make HTTP requests to dotnet backend
 function makeRequest(path, options = {}) {
   return new Promise((resolve, reject) => {
