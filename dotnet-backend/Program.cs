@@ -1,7 +1,26 @@
 using DotnetBackend.Data;
+using DotnetBackend.Endpoints;
 using DotnetBackend.Models;
+using Serilog;
+using Serilog.Events;
+
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
+
+try
+{
+    Log.Information("Starting dotnet-backend");
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, services, configuration) =>
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext());
 
 builder.Services.AddSingleton<DataStore>();
 
@@ -19,6 +38,42 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json";
+
+        var exceptionFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+        if (exceptionFeature is not null)
+        {
+            Log.Error(exceptionFeature.Error, "Unhandled exception for {Method} {Path}",
+                context.Request.Method, context.Request.Path);
+        }
+
+        await context.Response.WriteAsJsonAsync(new { error = "An unexpected error occurred" });
+    });
+});
+
+app.UseSerilogRequestLogging(options =>
+{
+    options.MessageTemplate =
+        "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
+    options.GetLevel = (httpContext, elapsed, ex) =>
+        ex != null || httpContext.Response.StatusCode >= 500
+            ? LogEventLevel.Error
+            : httpContext.Response.StatusCode >= 400
+                ? LogEventLevel.Warning
+                : LogEventLevel.Information;
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
+        diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
+        diagnosticContext.Set("UserAgent", httpContext.Request.Headers.UserAgent.ToString());
+    };
+});
 
 app.UseCors();
 
@@ -44,35 +99,9 @@ app.MapGet("/health", () =>
     });
 });
 
-app.MapGet("/api/users", (DataStore store) =>
-{
-    var users = store.GetUsers();
-    var response = new UsersResponse
-    {
-        Users = users,
-        Count = users.Count
-    };
-    return Results.Json(response);
-});
-
-app.MapGet("/api/users/{id:int}", (int id, DataStore store) =>
-{
-    var user = store.GetUserById(id);
-    return user is null
-        ? Results.NotFound(new { error = "User not found" })
-        : Results.Json(user);
-});
-
-app.MapGet("/api/tasks", (string? status, string? userId, DataStore store) =>
-{
-    var tasks = store.GetTasks(status, userId);
-    var response = new TasksResponse
-    {
-        Tasks = tasks,
-        Count = tasks.Count
-    };
-    return Results.Json(response);
-});
+app.MapUserEndpoints();
+app.MapTaskEndpoints();
+app.MapUtilityEndpoints();
 
 app.MapGet("/api/stats", (DataStore store) =>
 {
@@ -81,3 +110,12 @@ app.MapGet("/api/stats", (DataStore store) =>
 });
 
 app.Run($"http://0.0.0.0:{port}");
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "dotnet-backend terminated unexpectedly");
+}
+finally
+{
+    Log.CloseAndFlush();
+}

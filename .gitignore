@@ -1,0 +1,30 @@
+# .NET
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+*.suo
+*.user
+*.userprefs
+*.csproj.user
+.vs/
+.vscode/
+packages/
+.nuget/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+dist/
+build/
+.env
+.env.local
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store

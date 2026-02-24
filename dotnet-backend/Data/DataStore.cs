@@ -111,4 +111,67 @@ public class DataStore
             _lock.ExitReadLock();
         }
     }
+
+    /// <summary>
+    /// Architectural Decision: We calculate the next ID dynamically by scanning the collection
+    /// instead of storing a separate counter in the class. This ensures reliability and
+    /// eliminates potential drift between a counter and the actual data stored,
+    /// upholding the ID as a calculated property rather than persistent state.
+    /// </summary>
+    private static int GetNextId<T>(List<T> items, Func<T, int> idSelector)
+    {
+        return items.Count > 0 ? items.Max(idSelector) + 1 : 1;
+    }
+
+    public User CreateUser(string name, string email, string role)
+    {
+        _lock.EnterWriteLock();
+        try
+        {
+            var newId = GetNextId(_users, u => u.Id);
+            var user = new User { Id = newId, Name = name, Email = email, Role = role };
+            _users.Add(user);
+            return user;
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
+    }
+
+    public TaskItem CreateTask(string title, string status, int userId)
+    {
+        _lock.EnterWriteLock();
+        try
+        {
+            var newId = GetNextId(_tasks, t => t.Id);
+            var task = new TaskItem { Id = newId, Title = title, Status = status, UserId = userId };
+            _tasks.Add(task);
+            return task;
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
+    }
+
+    public TaskItem? UpdateTask(int id, string? title, string? status, int? userId)
+    {
+        _lock.EnterWriteLock();
+        try
+        {
+            var task = _tasks.FirstOrDefault(t => t.Id == id);
+            if (task is null) return null;
+
+            if (title is not null) task.Title = title;
+            if (status is not null) task.Status = status;
+            if (userId is not null) task.UserId = userId.Value;
+
+            return task;
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
+    }
 }
