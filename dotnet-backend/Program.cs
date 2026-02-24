@@ -2,6 +2,8 @@ using DotnetBackend.Data;
 using DotnetBackend.Endpoints;
 using DotnetBackend.Models;
 using Microsoft.AspNetCore.RateLimiting;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 using Serilog;
 using Serilog.Events;
 
@@ -67,6 +69,16 @@ builder.Services.AddRateLimiter(options =>
 
 builder.Services.AddHealthChecks().AddUrlGroup(new Uri("https://github.com"), name: "github", failureStatus: Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Degraded);
 
+var serviceName = builder.Environment.ApplicationName;
+var serviceVersion = typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown";
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource =>
+        resource.AddService(serviceName: serviceName, serviceVersion: serviceVersion))
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()  // standard ASP.NET Core HTTP server metrics
+        .AddPrometheusExporter());       // scraped at /metrics
+
 var app = builder.Build();
 
 app.UseExceptionHandler(errorApp =>
@@ -123,6 +135,9 @@ if (!int.TryParse(portEnv, out var port))
 }
 
 app.MapHealthChecks("/health");
+
+// Prometheus metrics scraping endpoint — GET /metrics
+app.MapPrometheusScrapingEndpoint();
 
 app.MapUserEndpoints();
 app.MapTaskEndpoints();
