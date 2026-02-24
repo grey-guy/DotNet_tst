@@ -81,24 +81,6 @@ builder.Services.AddOpenTelemetry()
 
 var app = builder.Build();
 
-app.UseExceptionHandler(errorApp =>
-{
-    errorApp.Run(async context =>
-    {
-        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        context.Response.ContentType = "application/json";
-
-        var exceptionFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
-        if (exceptionFeature is not null)
-        {
-            Log.Error(exceptionFeature.Error, "Unhandled exception for {Method} {Path}",
-                context.Request.Method, context.Request.Path);
-        }
-
-        await context.Response.WriteAsJsonAsync(new { error = "An unexpected error occurred" });
-    });
-});
-
 app.UseSerilogRequestLogging(options =>
 {
     options.MessageTemplate =
@@ -115,6 +97,24 @@ app.UseSerilogRequestLogging(options =>
         diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
         diagnosticContext.Set("UserAgent", httpContext.Request.Headers.UserAgent.ToString());
     };
+});
+
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json";
+
+        var exceptionFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+        if (exceptionFeature is not null)
+        {
+            Log.Error(exceptionFeature.Error, "Unhandled exception for {Method} {Path}",
+                context.Request.Method, context.Request.Path);
+        }
+
+        await context.Response.WriteAsJsonAsync(new { error = "An unexpected error occurred" });
+    });
 });
 
 app.UseCors();
