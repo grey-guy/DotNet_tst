@@ -72,6 +72,9 @@ public static class ValidationService
     {
         var errors = new List<string>();
 
+        if (title is not null && string.IsNullOrWhiteSpace(title))
+            errors.Add("Title cannot be empty");
+
         if (status is not null && !ValidStatuses.Contains(status))
             errors.Add("Status must be one of: pending, in-progress, completed");
 
