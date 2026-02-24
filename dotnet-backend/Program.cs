@@ -65,6 +65,8 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
+builder.Services.AddHealthChecks().AddUrlGroup(new Uri("https://github.com"), name: "github", failureStatus: Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Degraded);
+
 var app = builder.Build();
 
 app.UseExceptionHandler(errorApp =>
@@ -120,14 +122,7 @@ if (!int.TryParse(portEnv, out var port))
     port = defaultPort;
 }
 
-app.MapGet("/health", () =>
-{
-    return Results.Json(new HealthResponse
-    {
-        Status = "ok",
-        Message = ".NET backend is running"
-    });
-});
+app.MapHealthChecks("/health");
 
 app.MapUserEndpoints();
 app.MapTaskEndpoints();
