@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using DotnetBackend.Models;
+using DotnetBackend.Services;
 
 namespace DotnetBackend.Data;
 
@@ -125,6 +126,10 @@ public class DataStore
 
     public User CreateUser(string name, string email, string role)
     {
+        var validation = ValidationService.ValidateCreateUser(name, email, role);
+        if (!validation.IsValid)
+            throw new ArgumentException(string.Join("; ", validation.Errors));
+
         _lock.EnterWriteLock();
         try
         {
@@ -141,6 +146,11 @@ public class DataStore
 
     public TaskItem CreateTask(string title, string status, int userId)
     {
+        var validation = ValidationService.ValidateCreateTask(title, status, userId,
+            uid => _users.Any(u => u.Id == uid));
+        if (!validation.IsValid)
+            throw new ArgumentException(string.Join("; ", validation.Errors));
+
         _lock.EnterWriteLock();
         try
         {
@@ -157,6 +167,11 @@ public class DataStore
 
     public TaskItem? UpdateTask(int id, string? title, string? status, int? userId)
     {
+        var validation = ValidationService.ValidateUpdateTask(title, status, userId,
+            uid => _users.Any(u => u.Id == uid));
+        if (!validation.IsValid)
+            throw new ArgumentException(string.Join("; ", validation.Errors));
+
         _lock.EnterWriteLock();
         try
         {

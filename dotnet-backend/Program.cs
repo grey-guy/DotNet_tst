@@ -1,6 +1,7 @@
 using DotnetBackend.Data;
 using DotnetBackend.Endpoints;
 using DotnetBackend.Models;
+using Microsoft.AspNetCore.RateLimiting;
 using Serilog;
 using Serilog.Events;
 
@@ -34,6 +35,33 @@ builder.Services.AddCors(options =>
         policy.AllowAnyOrigin()
               .AllowAnyHeader()
               .AllowAnyMethod();
+    });
+});
+
+var outputCacheConfig = builder.Configuration.GetSection("ApiPolicies:OutputCache");
+var usersCacheDuration = outputCacheConfig.GetValue<int>("UsersCacheDurationSeconds", 3);
+var tasksCacheDuration = outputCacheConfig.GetValue<int>("TasksCacheDurationSeconds", 3);
+
+var rateLimitConfig = builder.Configuration.GetSection("ApiPolicies:RateLimit");
+var rateLimitPermit = rateLimitConfig.GetValue<int>("PermitLimit", 1);
+var rateLimitWindow = rateLimitConfig.GetValue<int>("WindowSeconds", 1);
+
+builder.Services.AddOutputCache(options =>
+{
+    options.AddPolicy("Users", policy =>
+        policy.Expire(TimeSpan.FromSeconds(usersCacheDuration)));
+    options.AddPolicy("Tasks", policy =>
+        policy.Expire(TimeSpan.FromSeconds(tasksCacheDuration)));
+});
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddFixedWindowLimiter("fixed", limiterOptions =>
+    {
+        limiterOptions.PermitLimit = rateLimitPermit;
+        limiterOptions.Window = TimeSpan.FromSeconds(rateLimitWindow);
+        limiterOptions.QueueLimit = 0;
     });
 });
 
@@ -76,6 +104,8 @@ app.UseSerilogRequestLogging(options =>
 });
 
 app.UseCors();
+app.UseRateLimiter();
+app.UseOutputCache();
 
 if (app.Environment.IsDevelopment())
 {
